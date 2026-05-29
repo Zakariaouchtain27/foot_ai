@@ -1,0 +1,9 @@
+# Core ingestion dependencies
+supabase>=2.6.0
+python-dotenv>=1.0.1
+
+# Computer-vision (YOLOv8) mode — optional, install for --mode yolo
+# These are heavy; the mock simulator does not need them.
+ultralytics>=8.2.0
+opencv-python>=4.9.0
+numpy>=1.26.0
