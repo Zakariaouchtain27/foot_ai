@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import CoachingPanel from "@/components/CoachingPanel";
 import MatchControls from "@/components/MatchControls";
 import MetricsPanel from "@/components/MetricsPanel";
 import PitchCanvas from "@/components/PitchCanvas";
@@ -48,6 +49,7 @@ export default function Home() {
 
         <aside className="flex flex-col gap-4">
           <MetricsPanel positions={positions} />
+          <CoachingPanel matchId={matchId} positions={positions} />
           {status !== "connected" && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
               {status === "error"
