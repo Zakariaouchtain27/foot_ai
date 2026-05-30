@@ -19,8 +19,8 @@ import modal
 
 image = (
     modal.Image.debian_slim()
-    # OpenCV runtime libs (opencv-python-headless still needs libGL/glib at import)
-    .apt_install("libgl1", "libglib2.0-0")
+    # OpenCV runtime libs + ffmpeg (yt-dlp uses it to clip URL downloads)
+    .apt_install("libgl1", "libglib2.0-0", "ffmpeg")
     .pip_install_from_requirements("requirements.txt")
     .add_local_python_source("process_job")
 )

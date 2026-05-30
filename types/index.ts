@@ -48,7 +48,9 @@ export type JobStatus = "queued" | "processing" | "done" | "error";
 export interface ProcessingJob {
   id: string;
   match_id: string;
-  video_path: string;
+  video_path: string | null;
+  source_url: string | null;
+  max_seconds: number | null;
   status: JobStatus;
   message: string | null;
   progress: number;

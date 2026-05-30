@@ -8,9 +8,10 @@ import type { JobStatus, ProcessingJob } from "@/types";
 
 type Phase = "idle" | "uploading" | JobStatus;
 
-/** Derive a tidy, unique match id from a filename. */
-function slugMatchId(filename: string): string {
-  const base = filename
+/** Derive a tidy, unique match id from a filename or URL. */
+function slugMatchId(seed: string): string {
+  const base = seed
+    .replace(/^https?:\/\//, "")
     .replace(/\.[^.]+$/, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -21,7 +22,7 @@ function slugMatchId(filename: string): string {
 }
 
 const STATUS_LABEL: Record<Phase, string> = {
-  idle: "Choose a video to begin",
+  idle: "Choose a video or paste a link to begin",
   uploading: "Uploading video…",
   queued: "Queued — waiting for a worker to pick it up",
   processing: "Analyzing video…",
@@ -29,19 +30,31 @@ const STATUS_LABEL: Record<Phase, string> = {
   error: "Something went wrong",
 };
 
+// How much of the video to analyze. Full matches are long, so default to a window.
+const WINDOWS = [
+  { label: "First 1 min", seconds: 60 },
+  { label: "First 2 min", seconds: 120 },
+  { label: "First 5 min", seconds: 300 },
+  { label: "Whole video", seconds: 0 },
+];
+
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [url, setUrl] = useState("");
   const [matchId, setMatchId] = useState("");
+  const [windowSeconds, setWindowSeconds] = useState(120);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const touchedId = useRef(false);
 
-  // Suggest a match id from the chosen file until the user edits it themselves.
+  // Suggest a match id from the chosen source until the user edits it.
   useEffect(() => {
-    if (file && !touchedId.current) setMatchId(slugMatchId(file.name));
-  }, [file]);
+    if (touchedId.current) return;
+    if (file) setMatchId(slugMatchId(file.name));
+    else if (url.trim()) setMatchId(slugMatchId(url.trim()));
+  }, [file, url]);
 
   // Watch this job's row for live status + progress updates.
   useEffect(() => {
@@ -68,28 +81,46 @@ export default function UploadPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    const hasFile = Boolean(file);
+    const hasUrl = url.trim().length > 0;
+    if (hasFile === hasUrl) {
+      setError("Pick a file OR paste a URL — exactly one.");
+      setPhase("error");
+      return;
+    }
     setError(null);
     setProgress(0);
-    const id = (matchId.trim() || slugMatchId(file.name)).replace(/[^a-zA-Z0-9_-]/g, "-");
+
+    const seed = hasFile && file ? file.name : url.trim();
+    const id = (matchId.trim() || slugMatchId(seed)).replace(/[^a-zA-Z0-9_-]/g, "-");
     setMatchId(id);
-    setPhase("uploading");
+    const maxSeconds = windowSeconds > 0 ? windowSeconds : null;
 
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${id}/${Date.now()}-${safeName}`;
+      let videoPath: string | null = null;
 
-      const { error: upErr } = await supabase.storage
-        .from("match-uploads")
-        .upload(path, file, {
-          upsert: false,
-          contentType: file.type || "application/octet-stream",
-        });
-      if (upErr) throw upErr;
+      if (hasFile && file) {
+        setPhase("uploading");
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        videoPath = `${id}/${Date.now()}-${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from("match-uploads")
+          .upload(videoPath, file, {
+            upsert: false,
+            contentType: file.type || "application/octet-stream",
+          });
+        if (upErr) throw upErr;
+      }
 
       const { data, error: jobErr } = await supabase
         .from("processing_jobs")
-        .insert({ match_id: id, video_path: path, status: "queued" })
+        .insert({
+          match_id: id,
+          video_path: videoPath,
+          source_url: hasUrl ? url.trim() : null,
+          max_seconds: maxSeconds,
+          status: "queued",
+        })
         .select("id")
         .single();
       if (jobErr) throw jobErr;
@@ -112,7 +143,7 @@ export default function UploadPage() {
             Analyze a <span className="text-home">Video</span>
           </h1>
           <p className="text-sm text-slate-400">
-            Upload match footage and watch it play back as tactical telemetry.
+            Upload footage or paste a link, and watch it play back as tactical telemetry.
           </p>
         </div>
         <Link href="/" className="text-sm text-home hover:underline">
@@ -125,42 +156,82 @@ export default function UploadPage() {
         className="flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-5"
       >
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Match video</span>
+          <span className="text-xs uppercase tracking-wide text-slate-400">
+            Paste a video URL (YouTube or .mp4)
+          </span>
+          <input
+            type="url"
+            value={url}
+            disabled={busy || Boolean(file)}
+            onChange={(e) => {
+              touchedId.current = false;
+              setUrl(e.target.value);
+            }}
+            placeholder="https://www.youtube.com/watch?v=…"
+            className="w-full rounded-md border border-white/10 bg-slate-950 px-3 py-1.5 text-sm outline-none focus:border-home disabled:opacity-40"
+          />
+        </label>
+
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <span className="h-px flex-1 bg-white/10" /> or upload a file <span className="h-px flex-1 bg-white/10" />
+        </div>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs uppercase tracking-wide text-slate-400">Match video file</span>
           <input
             type="file"
             accept="video/*"
-            disabled={busy}
+            disabled={busy || url.trim().length > 0}
             onChange={(e) => {
               touchedId.current = false;
               setFile(e.target.files?.[0] ?? null);
             }}
-            className="text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-home file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-950"
+            className="text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-home file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-950 disabled:opacity-40"
           />
           <span className="text-[11px] text-slate-500">
-            Best results: one wide, fixed &ldquo;tactical&rdquo; camera. Up to 500&nbsp;MB.
+            Direct uploads are capped by your Supabase plan (free ≈ 50&nbsp;MB) — use a URL for big
+            matches. Best results: one wide, fixed &ldquo;tactical&rdquo; camera.
           </span>
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Match ID</span>
-          <input
-            value={matchId}
-            disabled={busy}
-            onChange={(e) => {
-              touchedId.current = true;
-              setMatchId(e.target.value);
-            }}
-            placeholder="auto-generated from filename"
-            className="w-64 rounded-md border border-white/10 bg-slate-950 px-3 py-1.5 font-mono text-sm outline-none focus:border-home"
-          />
-        </label>
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wide text-slate-400">Analyze</span>
+            <select
+              value={windowSeconds}
+              disabled={busy}
+              onChange={(e) => setWindowSeconds(Number(e.target.value))}
+              className="rounded-md border border-white/10 bg-slate-950 px-3 py-1.5 text-sm outline-none focus:border-home"
+            >
+              {WINDOWS.map((w) => (
+                <option key={w.seconds} value={w.seconds}>
+                  {w.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wide text-slate-400">Match ID</span>
+            <input
+              value={matchId}
+              disabled={busy}
+              onChange={(e) => {
+                touchedId.current = true;
+                setMatchId(e.target.value);
+              }}
+              placeholder="auto-generated"
+              className="w-56 rounded-md border border-white/10 bg-slate-950 px-3 py-1.5 font-mono text-sm outline-none focus:border-home"
+            />
+          </label>
+        </div>
 
         <button
           type="submit"
-          disabled={!file || busy}
+          disabled={busy || (!file && url.trim().length === 0)}
           className="w-fit rounded-md bg-home px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? "Working…" : "Upload & analyze"}
+          {busy ? "Working…" : "Analyze"}
         </button>
       </form>
 
