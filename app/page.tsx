@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import CoachingPanel from "@/components/CoachingPanel";
 import MatchControls from "@/components/MatchControls";
@@ -15,6 +16,12 @@ export default function Home() {
 
   const { positions, status, updatesPerSecond } = useMatchRealtime(matchId);
 
+  // Allow deep-linking a specific match, e.g. /?match=demo-001 (used by /upload).
+  useEffect(() => {
+    const m = new URLSearchParams(window.location.search).get("match");
+    if (m) setMatchId(m);
+  }, []);
+
   return (
     <main className="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 p-4 sm:p-6">
       <header className="flex items-baseline justify-between">
@@ -24,8 +31,14 @@ export default function Home() {
           </h1>
           <p className="text-sm text-slate-400">Real-time tactical telemetry · bench dashboard</p>
         </div>
-        <div className="hidden text-right text-xs text-slate-500 sm:block">
-          <div>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/upload"
+            className="rounded-md border border-home/40 px-3 py-1.5 text-sm font-semibold text-home transition hover:bg-home/10"
+          >
+            Analyze a video
+          </Link>
+          <div className="hidden text-right text-xs text-slate-500 sm:block">
             <span className="text-home">●</span> Home &nbsp; <span className="text-away">●</span> Away
           </div>
         </div>

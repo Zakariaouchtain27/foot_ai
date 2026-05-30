@@ -41,3 +41,17 @@ export interface TeamMetrics {
 }
 
 export const teamKey = (team: Team, jersey: number): string => `${team}_${jersey}`;
+
+export type JobStatus = "queued" | "processing" | "done" | "error";
+
+/** A video-upload analysis job, as stored in `processing_jobs`. */
+export interface ProcessingJob {
+  id: string;
+  match_id: string;
+  video_path: string;
+  status: JobStatus;
+  message: string | null;
+  progress: number;
+  created_at: string;
+  updated_at: string;
+}
