@@ -42,7 +42,7 @@ export default function Home() {
         onToggleCentroid={setShowCentroid}
       />
 
-      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+      <div className="grid flex-1 grid-cols-1 items-start gap-4 lg:grid-cols-[2fr_1fr]">
         <section className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
           <PitchCanvas positions={positions} showHull={showHull} showCentroid={showCentroid} />
         </section>

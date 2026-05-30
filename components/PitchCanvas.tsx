@@ -48,9 +48,12 @@ export default function PitchCanvas({
     const resize = () => {
       const rect = container.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      // Constrain to the pitch aspect ratio inside the available box.
+      // Derive height from width and the pitch aspect ratio. Deriving from the
+      // container height instead would couple the canvas to its parent's height
+      // (which the canvas itself sets), so the box balloons and the pitch floats
+      // at the top with empty space below.
       width = rect.width;
-      height = Math.min(rect.width / ASPECT, rect.height);
+      height = rect.width / ASPECT;
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       canvas.style.width = `${width}px`;
