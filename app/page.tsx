@@ -33,7 +33,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
           <Link
-            href="/upload"
+            href="/analyze"
             className="rounded-md border border-home/40 px-3 py-1.5 text-sm font-semibold text-home transition hover:bg-home/10"
           >
             Analyze a video
